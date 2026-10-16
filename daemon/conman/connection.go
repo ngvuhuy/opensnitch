@@ -131,15 +131,23 @@ func newConnectionImpl(nfp *netfilter.Packet, c *Connection, protoType string) (
 	// gobpf/libbpf is unable to delete ebpf map entries, so when they reach the maximum capacity no
 	// more entries are added, nor updated.
 	if pid < 0 {
+		// Kernel-generated ICMP errors (for example a port unreachable for a
+		// socket that was already closed) have no packet UID and no owning
+		// socket. Do not let the socket/netstat fallbacks attribute them to an
+		// unrelated process that happens to own a raw ICMP socket.
+		kernelICMP := (c.Protocol == "icmp" || c.Protocol == "icmp6") && nfp.UID == 0xffffffff
+
 		// 0. lookup uid and inode via netlink. Can return several inodes.
 		// 1. lookup uid and inode using /proc/net/(udp|tcp|udplite)
 		// 2. lookup pid by inode
 		// 3. if this is coming from us, just accept
 		// 4. lookup process info by pid
 		var inodeList []int
-		uid, inodeList = netlink.GetSocketInfo(c.Protocol, c.SrcIP, c.SrcPort, c.DstIP, c.DstPort)
-		if len(inodeList) == 0 {
-			procmon.GetInodeFromNetstat(c.Entry, &inodeList, c.Protocol, c.SrcIP, c.SrcPort, c.DstIP, c.DstPort)
+		if !kernelICMP {
+			uid, inodeList = netlink.GetSocketInfo(c.Protocol, c.SrcIP, c.SrcPort, c.DstIP, c.DstPort, nfp.UID)
+			if len(inodeList) == 0 {
+				procmon.GetInodeFromNetstat(c.Entry, &inodeList, c.Protocol, c.SrcIP, c.SrcPort, c.DstIP, c.DstPort)
+			}
 		}
 
 		for n, inode := range inodeList {

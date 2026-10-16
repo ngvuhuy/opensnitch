@@ -1,0 +1,8 @@
+.git
+.github
+ui
+ebpf_prog
+screenshots
+utils
+*.md
+daemon/opensnitchd

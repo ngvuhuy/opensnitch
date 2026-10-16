@@ -1,0 +1,57 @@
+# Builds opensnitchd from source inside a Fedora container.
+#
+#   podman build -f Dockerfile.build -t opensnitchd-build .
+#   podman run --rm opensnitchd-build --version
+#
+# To extract the compiled binary:
+#   podman create --name osd opensnitchd-build
+#   podman cp osd:/usr/local/bin/opensnitchd ./opensnitchd
+#   podman rm osd
+#
+# NOTE: the eBPF modules (ebpf_prog/) are intentionally NOT built here.
+# The process-attribution fix lives entirely in the Go daemon and does not
+# change the eBPF ABI, so the existing modules remain compatible.
+
+FROM fedora:44 AS builder
+
+RUN dnf -y install \
+        golang \
+        gcc \
+        make \
+        git \
+        pkgconf-pkg-config \
+        protobuf-compiler \
+        libnetfilter_queue-devel \
+        libmnl-devel \
+        libpcap-devel \
+    && dnf clean all
+
+ENV GOPATH=/root/go
+ENV PATH="${PATH}:/root/go/bin"
+ENV CGO_ENABLED=1
+
+# Same versions as .github/workflows/go.yml
+RUN go install github.com/golang/protobuf/protoc-gen-go@latest \
+ && go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1 \
+ && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
+
+WORKDIR /src
+COPY . .
+
+# The generated Go bindings are not committed, so generate them first.
+RUN make -C proto ../daemon/ui/protocol/ui.pb.go
+
+WORKDIR /src/daemon
+RUN go mod download
+RUN go build -v -o /out/opensnitchd .
+
+# ---------------------------------------------------------------------------
+FROM fedora:44
+
+RUN dnf -y install libnetfilter_queue libmnl libpcap \
+    && dnf clean all
+
+COPY --from=builder /out/opensnitchd /usr/local/bin/opensnitchd
+
+ENTRYPOINT ["/usr/local/bin/opensnitchd"]
+CMD ["--version"]

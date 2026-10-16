@@ -83,7 +83,7 @@ func TestNetlinkTCPQueries(t *testing.T) {
 	var inodes []int
 	uid := -1
 	t.Run("Test GetSocketInfo", func(t *testing.T) {
-		uid, inodes = GetSocketInfo("tcp", conn.SrcIP, conn.SrcPort, conn.DstIP, conn.DstPort)
+		uid, inodes = GetSocketInfo("tcp", conn.SrcIP, conn.SrcPort, conn.DstIP, conn.DstPort, 0xffffffff)
 
 		if len(inodes) == 0 {
 			t.Error("inodes empty")

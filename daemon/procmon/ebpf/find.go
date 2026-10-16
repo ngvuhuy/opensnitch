@@ -43,7 +43,7 @@ func GetPid(proto string, srcPort uint, srcIP net.IP, dstIP net.IP, dstPort uint
 	}
 
 	//using netlink.GetSocketInfo to check if UID is 0 (in-kernel connection)
-	if uid, _ := daemonNetlink.GetSocketInfo(proto, srcIP, srcPort, dstIP, dstPort); uid == 0 {
+	if uid, _ := daemonNetlink.GetSocketInfo(proto, srcIP, srcPort, dstIP, dstPort, 0xffffffff); uid == 0 {
 		return nil, false, nil
 	}
 	return nil, false, nil
